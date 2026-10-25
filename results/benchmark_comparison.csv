@@ -1,0 +1,4 @@
+policy,mean_reward,std_reward,mean_steps,std_steps,success_rate,episodes_tested
+Random Policy,-232.5,76.26303167328192,96.62,12.74031396787379,12.0,50
+Shortest-Path Baseline,93.36,10.426427959756879,15.16,4.734384859725706,100.0,50
+Q-Learning (Ours),92.64,11.875622088968644,15.52,5.004957542277457,100.0,50
