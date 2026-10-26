@@ -9,6 +9,7 @@ Then open http://localhost:5000 in your browser!
 """
 
 import os
+import time
 import json
 import urllib.parse
 from http.server import HTTPServer, BaseHTTPRequestHandler
@@ -45,6 +46,23 @@ class SimulationManager:
         self.total_reward = 0.0
         self.history = [self.env.taxi_pos]
         self.active_policy = "q_learning"
+
+    def generate_world(self, dim: int):
+        """Generate a brand new city with user-specified dimensions and train agent."""
+        self.grid_dim = dim
+        new_seed = int(time.time() * 1000) % 100000
+        self.env_cfg = EnvConfig(grid_size=(dim, dim), num_stations=4, seed=new_seed)
+        self.env = TaxiCityEnv(env_config=self.env_cfg)
+        self.agent = QLearningAgent(num_actions=4, config=QLearningConfig(alpha=0.2, gamma=0.98, epsilon_decay=0.997))
+        trainer = Trainer(env=self.env, agent=self.agent, env_config=self.env_cfg)
+        episodes = 1200 if dim <= 8 else 1800
+        trainer.train(num_episodes=episodes, verbose=False)
+        self.current_state = self.env.reset(reset_traffic=True)
+        self.initial_endpoints = (self.env.taxi_pos, self.env.passenger_pos, self.env.dest_pos)
+        self.initial_traffic = self.env.traffic_mgr.traffic_grid.copy()
+        self.total_reward = 0.0
+        self.history = [self.env.taxi_pos]
+        return self.get_payload()
 
     def reset(self, station_pair=None):
         if station_pair and len(self.env.grid.stations) >= 2:
@@ -301,6 +319,19 @@ HTML_PAGE = """<!DOCTYPE html>
             </div>
 
             <div class="control-group">
+                <label class="control-label">City Grid Dimension</label>
+                <div style="display: flex; gap: 0.5rem;">
+                    <select id="gridSizeSelect" style="flex: 1;">
+                        <option value="6">6x6 (Compact City)</option>
+                        <option value="8" selected>8x8 (Standard City)</option>
+                        <option value="10">10x10 (Large City)</option>
+                        <option value="12">12x12 (Metropolis)</option>
+                    </select>
+                    <button class="btn-primary" style="background: #8b5cf6;" onclick="generateCity()">🏗️ Build</button>
+                </div>
+            </div>
+
+            <div class="control-group">
                 <label class="control-label">Active Policy</label>
                 <select id="policySelect" onchange="changePolicy()">
                     <option value="q_learning">Q-Learning Agent (Learned Policy)</option>
@@ -383,6 +414,17 @@ HTML_PAGE = """<!DOCTYPE html>
             currentData = await res.json();
             render();
             updateUI();
+        }
+
+        async function generateCity() {
+            stopPlay();
+            const sz = document.getElementById('gridSizeSelect').value;
+            document.getElementById('statusText').textContent = `Generating ${sz}x${sz} City & Training Agent...`;
+            const res = await fetch(`/api/generate_city?size=${sz}`);
+            currentData = await res.json();
+            render();
+            updateUI();
+            document.getElementById('statusText').textContent = `New ${sz}x${sz} City generated & trained successfully!`;
         }
 
         async function applyMission() {
@@ -617,6 +659,11 @@ class RequestHandler(BaseHTTPRequestHandler):
             if "set" in query:
                 SIM.active_policy = query["set"][0]
             self.send_json({"active_policy": SIM.active_policy})
+
+        elif path == "/api/generate_city":
+            size = int(query.get("size", ["8"])[0])
+            payload = SIM.generate_world(size)
+            self.send_json(payload)
 
         else:
             self.send_response(404)
