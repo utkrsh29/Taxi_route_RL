@@ -137,22 +137,34 @@ class TaxiRLApp:
                                         font=("Segoe UI", 9), fg="#94a3b8", bg="#1e293b", anchor="w")
         self.lbl_last_action.pack(fill=tk.X, pady=2)
 
-        # Grid Size & City Generator Frame
-        grid_frame = tk.LabelFrame(ctrl_card, text=" 🗺️ Dynamic City Generator ", font=("Segoe UI", 10, "bold"),
+        # Grid Dimensions & City Generator Frame (Custom 2-Dimensions up to 15)
+        grid_frame = tk.LabelFrame(ctrl_card, text=" 🗺️ City Dimensions (Rows × Cols) ", font=("Segoe UI", 10, "bold"),
                                    fg="#38bdf8", bg="#1e293b", padx=10, pady=8)
         grid_frame.pack(fill=tk.X, padx=15, pady=6)
 
-        grid_row = tk.Frame(grid_frame, bg="#1e293b")
-        grid_row.pack(fill=tk.X, pady=2)
-        tk.Label(grid_row, text="City Size:", fg="#cbd5e1", bg="#1e293b", font=("Segoe UI", 9, "bold")).pack(side=tk.LEFT)
-        self.selected_grid_dim = tk.StringVar(value="8x8 (Standard)")
-        grid_menu = ttk.Combobox(grid_row, textvariable=self.selected_grid_dim, state="readonly", width=16,
-                                 values=["6x6 (Compact)", "8x8 (Standard)", "10x10 (Large)", "12x12 (Metropolis)"])
-        grid_menu.pack(side=tk.RIGHT, fill=tk.X, expand=True, padx=(8, 0))
+        dim_row = tk.Frame(grid_frame, bg="#1e293b")
+        dim_row.pack(fill=tk.X, pady=4)
 
-        btn_gen_city = tk.Button(grid_frame, text="🏗️ Generate City & Train", command=self._generate_new_world,
+        tk.Label(dim_row, text="Rows:", fg="#cbd5e1", bg="#1e293b", font=("Segoe UI", 9, "bold")).pack(side=tk.LEFT)
+        self.spin_rows = tk.Spinbox(dim_row, from_=4, to=15, width=4, font=("Segoe UI", 10, "bold"),
+                                    bg="#0f172a", fg="#38bdf8", buttonbackground="#334155", justify="center")
+        self.spin_rows.delete(0, "end")
+        self.spin_rows.insert(0, 8)
+        self.spin_rows.pack(side=tk.LEFT, padx=(4, 12))
+
+        tk.Label(dim_row, text="Cols:", fg="#cbd5e1", bg="#1e293b", font=("Segoe UI", 9, "bold")).pack(side=tk.LEFT)
+        self.spin_cols = tk.Spinbox(dim_row, from_=4, to=15, width=4, font=("Segoe UI", 10, "bold"),
+                                    bg="#0f172a", fg="#38bdf8", buttonbackground="#334155", justify="center")
+        self.spin_cols.delete(0, "end")
+        self.spin_cols.insert(0, 8)
+        self.spin_cols.pack(side=tk.LEFT, padx=(4, 0))
+
+        tk.Label(grid_frame, text="Allowed: 4 to 15 (e.g., 6x12, 10x15, 15x15)",
+                 fg="#94a3b8", bg="#1e293b", font=("Segoe UI", 8)).pack(anchor="w", pady=(2, 4))
+
+        btn_gen_city = tk.Button(grid_frame, text="🏗️ Generate City & Optimize Route", command=self._generate_new_world,
                                  bg="#8b5cf6", fg="white", font=("Segoe UI", 9, "bold"), relief=tk.FLAT)
-        btn_gen_city.pack(fill=tk.X, pady=(6, 2))
+        btn_gen_city.pack(fill=tk.X, pady=(2, 2))
 
         # Control Panel: Agent Selector
         agent_frame = tk.LabelFrame(ctrl_card, text=" Agent / Policy Selection ", font=("Segoe UI", 10, "bold"),
@@ -179,9 +191,9 @@ class TaxiRLApp:
             "Station 1 -> Station 3"
         ]
         self.selected_mission = tk.StringVar(value=self.mission_options[0])
-        mission_menu = ttk.Combobox(mission_frame, textvariable=self.selected_mission, state="readonly",
-                                    values=self.mission_options)
-        mission_menu.pack(fill=tk.X, pady=4)
+        self.mission_menu = ttk.Combobox(mission_frame, textvariable=self.selected_mission, state="readonly",
+                                         values=self.mission_options)
+        self.mission_menu.pack(fill=tk.X, pady=4)
 
         btn_apply_mission = tk.Button(mission_frame, text="Load Mission Route", command=self._apply_preset_mission,
                                       bg="#0284c7", fg="white", font=("Segoe UI", 9, "bold"), relief=tk.FLAT)
@@ -265,28 +277,43 @@ class TaxiRLApp:
         self.render_grid()
 
     def _generate_new_world(self):
-        """User-driven dynamic world generation with custom grid dimension."""
+        """User-driven dynamic world generation with custom 2D grid dimensions (Rows x Cols up to 15)."""
         self.is_playing = False
         self.btn_play.config(text="▶ Auto Play", bg="#16a34a")
 
-        # Parse dimension from dropdown
-        dim_str = self.selected_grid_dim.get().split("x")[0].strip()
-        new_dim = int(dim_str)
-        self.grid_dim = new_dim
+        # Parse 2 dimensions from spinboxes (clamped between 4 and 15)
+        try:
+            rows = max(4, min(15, int(self.spin_rows.get())))
+            cols = max(4, min(15, int(self.spin_cols.get())))
+        except ValueError:
+            rows, cols = 8, 8
 
-        self.lbl_status.config(text=f"Generating {new_dim}x{new_dim} City & Training Agent...", fg="#a855f7")
+        self.lbl_status.config(text=f"Generating {rows}x{cols} City & Optimizing Route...", fg="#a855f7")
         self.root.update()
+
+        # Dynamic max steps scaled to grid perimeter
+        max_steps = max(100, (rows + cols) * 6)
 
         # Generate new environment with random seed and obstacles
         new_seed = int(time.time() * 1000) % 100000
-        self.env_cfg = EnvConfig(grid_size=(new_dim, new_dim), num_stations=4, seed=new_seed)
+        self.env_cfg = EnvConfig(grid_size=(rows, cols), max_steps=max_steps, num_stations=4, seed=new_seed)
         self.env = TaxiCityEnv(env_config=self.env_cfg)
 
-        # Train new agent on this freshly generated city topology
-        self.agent = QLearningAgent(num_actions=4, config=QLearningConfig(alpha=0.2, gamma=0.98, epsilon_decay=0.997))
+        # Initialize Q-learning agent with topological and traffic potential seeding
+        self.agent = QLearningAgent(num_actions=4, config=QLearningConfig(alpha=0.1, gamma=0.99, epsilon=0.05, epsilon_decay=0.98))
+        self.agent.seed_from_topology(self.env)
+
+        # Quick fine-tuning to adapt to randomized initial traffic bottlenecks
         trainer = Trainer(env=self.env, agent=self.agent, env_config=self.env_cfg)
-        episodes = 1200 if new_dim <= 8 else 1800
-        trainer.train(num_episodes=episodes, verbose=False)
+        trainer.train(num_episodes=150, verbose=False)
+
+        # Update transit mission preset options dynamically for new station coordinates
+        st_count = len(self.env.grid.stations)
+        self.mission_options = [f"Station {i} -> Station {(i+1)%st_count}" for i in range(st_count)]
+        if st_count >= 3:
+            self.mission_options.append("Station 0 -> Station 2")
+        self.mission_menu["values"] = self.mission_options
+        self.selected_mission.set(self.mission_options[0])
 
         # Re-initialize state & snapshot
         self.current_state = self.env.reset(reset_traffic=True)
@@ -298,7 +325,7 @@ class TaxiRLApp:
 
         self._update_telemetry()
         self.render_grid()
-        messagebox.showinfo("City Generated!", f"New {new_dim}x{new_dim} City successfully generated with obstacles, transit hubs, and traffic!\nAgent trained & ready to drive.")
+        messagebox.showinfo("City Generated!", f"New {rows}x{cols} City successfully generated with obstacles, transit hubs, and traffic!\nAgent route optimized & ready to navigate.")
 
     def reset_env(self):
         """Randomize mission endpoints and traffic."""
@@ -394,16 +421,17 @@ class TaxiRLApp:
         """Draw dynamic city canvas with obstacles, traffic, and vehicle path."""
         self.canvas.delete("all")
         rows, cols = self.env.grid.rows, self.env.grid.cols
-        cell_size = self.canvas_size / cols
+        cell_w = self.canvas_size / cols
+        cell_h = self.canvas_size / rows
         traffic_grid = self.env.traffic_mgr.traffic_grid
 
         # 1. Base Grid, Obstacles & Traffic Cells
         for r in range(rows):
             for c in range(cols):
-                x1 = c * cell_size
-                y1 = r * cell_size
-                x2 = x1 + cell_size
-                y2 = y1 + cell_size
+                x1 = c * cell_w
+                y1 = r * cell_h
+                x2 = x1 + cell_w
+                y2 = y1 + cell_h
 
                 # Check obstacle
                 if self.env.grid.obstacles[r, c]:
@@ -422,33 +450,34 @@ class TaxiRLApp:
         if len(self.step_history) >= 2:
             pts = []
             for (r, c) in self.step_history:
-                pts.append(c * cell_size + cell_size / 2)
-                pts.append(r * cell_size + cell_size / 2)
+                pts.append(c * cell_w + cell_w / 2)
+                pts.append(r * cell_h + cell_h / 2)
             self.canvas.create_line(pts, fill="#38bdf8", width=3, smooth=False, arrow=tk.LAST)
 
         # 3. Passenger Location (if not picked)
-        rad = max(8, cell_size * 0.32)
-        font_sz = max(8, int(cell_size * 0.22))
-        badge_sz = max(9, int(cell_size * 0.24))
+        min_cell = min(cell_w, cell_h)
+        rad = max(6, min_cell * 0.32)
+        font_sz = max(7, int(min_cell * 0.22))
+        badge_sz = max(8, int(min_cell * 0.24))
 
         if not self.env.passenger_picked:
             pr, pc = self.env.passenger_pos
-            px = pc * cell_size + cell_size / 2
-            py = pr * cell_size + cell_size / 2
+            px = pc * cell_w + cell_w / 2
+            py = pr * cell_h + cell_h / 2
             self.canvas.create_oval(px - rad, py - rad, px + rad, py + rad, fill="#10b981", outline="#059669", width=2)
             self.canvas.create_text(px, py, text="P", fill="white", font=("Segoe UI", font_sz, "bold"))
 
         # 4. Destination Location
         dr, dc = self.env.dest_pos
-        dx = dc * cell_size + cell_size / 2
-        dy = dr * cell_size + cell_size / 2
+        dx = dc * cell_w + cell_w / 2
+        dy = dr * cell_h + cell_h / 2
         self.canvas.create_rectangle(dx - rad, dy - rad, dx + rad, dy + rad, fill="#ef4444", outline="#b91c1c", width=2)
         self.canvas.create_text(dx, dy, text="D", fill="white", font=("Segoe UI", font_sz, "bold"))
 
         # 5. Taxi Vehicle
         tr, tc = self.env.taxi_pos
-        tx = tc * cell_size + cell_size / 2
-        ty = tr * cell_size + cell_size / 2
+        tx = tc * cell_w + cell_w / 2
+        ty = tr * cell_h + cell_h / 2
         self.canvas.create_oval(tx - rad * 1.1, ty - rad * 1.1, tx + rad * 1.1, ty + rad * 1.1, fill="#f59e0b", outline="#d97706", width=2.5)
         badge = "🚕" if not self.env.passenger_picked else "🚕👤"
         self.canvas.create_text(tx, ty, text=badge, font=("Segoe UI", badge_sz))

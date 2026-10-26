@@ -23,11 +23,12 @@ class RouteVisualizer:
 
     def rollout_policy(self, agent: Any,
                        fixed_endpoints: Optional[Tuple[Tuple[int, int], Tuple[int, int], Tuple[int, int]]] = None,
-                       max_steps: int = 100) -> Dict[str, Any]:
+                       max_steps: Optional[int] = None) -> Dict[str, Any]:
         """
         Execute deterministic evaluation rollout using greedy policy.
         Returns detailed trajectory information.
         """
+        limit = max_steps or getattr(self.env.env_config, "max_steps", 100)
         state = self.env.reset(fixed_endpoints=fixed_endpoints)
         start_taxi = self.env.taxi_pos
         passenger_pos = self.env.passenger_pos
@@ -42,7 +43,7 @@ class RouteVisualizer:
         step_count = 0
         total_reward = 0.0
 
-        while not done and step_count < max_steps:
+        while not done and step_count < limit:
             # Greedy action
             if hasattr(agent, "select_action"):
                 action = agent.select_action(state, explore=False)

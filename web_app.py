@@ -47,16 +47,19 @@ class SimulationManager:
         self.history = [self.env.taxi_pos]
         self.active_policy = "q_learning"
 
-    def generate_world(self, dim: int):
-        """Generate a brand new city with user-specified dimensions and train agent."""
-        self.grid_dim = dim
+    def generate_world(self, rows: int = 8, cols: int = 8):
+        """Generate a brand new city with user-specified dimensions (Rows x Cols 4-15) and optimize agent."""
+        rows = max(4, min(15, int(rows)))
+        cols = max(4, min(15, int(cols)))
+        self.grid_dim = (rows, cols)
         new_seed = int(time.time() * 1000) % 100000
-        self.env_cfg = EnvConfig(grid_size=(dim, dim), num_stations=4, seed=new_seed)
+        max_steps = max(100, (rows + cols) * 6)
+        self.env_cfg = EnvConfig(grid_size=(rows, cols), max_steps=max_steps, num_stations=4, seed=new_seed)
         self.env = TaxiCityEnv(env_config=self.env_cfg)
-        self.agent = QLearningAgent(num_actions=4, config=QLearningConfig(alpha=0.2, gamma=0.98, epsilon_decay=0.997))
+        self.agent = QLearningAgent(num_actions=4, config=QLearningConfig(alpha=0.1, gamma=0.99, epsilon=0.05, epsilon_decay=0.98))
+        self.agent.seed_from_topology(self.env)
         trainer = Trainer(env=self.env, agent=self.agent, env_config=self.env_cfg)
-        episodes = 1200 if dim <= 8 else 1800
-        trainer.train(num_episodes=episodes, verbose=False)
+        trainer.train(num_episodes=150, verbose=False)
         self.current_state = self.env.reset(reset_traffic=True)
         self.initial_endpoints = (self.env.taxi_pos, self.env.passenger_pos, self.env.dest_pos)
         self.initial_traffic = self.env.traffic_mgr.traffic_grid.copy()
@@ -319,16 +322,18 @@ HTML_PAGE = """<!DOCTYPE html>
             </div>
 
             <div class="control-group">
-                <label class="control-label">City Grid Dimension</label>
-                <div style="display: flex; gap: 0.5rem;">
-                    <select id="gridSizeSelect" style="flex: 1;">
-                        <option value="6">6x6 (Compact City)</option>
-                        <option value="8" selected>8x8 (Standard City)</option>
-                        <option value="10">10x10 (Large City)</option>
-                        <option value="12">12x12 (Metropolis)</option>
-                    </select>
-                    <button class="btn-primary" style="background: #8b5cf6;" onclick="generateCity()">🏗️ Build</button>
+                <label class="control-label">City Dimensions (Rows × Cols, 4 - 15)</label>
+                <div style="display: flex; gap: 0.5rem; align-items: center;">
+                    <div style="flex: 1;">
+                        <input type="number" id="inputRows" min="4" max="15" value="8" style="text-align: center; font-weight: 700; font-size: 1rem; width: 100%;" title="Rows (4-15)">
+                    </div>
+                    <span style="color: var(--text-muted); font-size: 1.1rem; font-weight: bold;">×</span>
+                    <div style="flex: 1;">
+                        <input type="number" id="inputCols" min="4" max="15" value="8" style="text-align: center; font-weight: 700; font-size: 1rem; width: 100%;" title="Columns (4-15)">
+                    </div>
+                    <button class="btn-primary" style="background: #8b5cf6; padding: 0.65rem 1rem;" onclick="generateCity()">🏗️ Build</button>
                 </div>
+                <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.35rem;">Custom 2D layout: e.g. 6×12, 10×15, 15×15</div>
             </div>
 
             <div class="control-group">
@@ -418,13 +423,28 @@ HTML_PAGE = """<!DOCTYPE html>
 
         async function generateCity() {
             stopPlay();
-            const sz = document.getElementById('gridSizeSelect').value;
-            document.getElementById('statusText').textContent = `Generating ${sz}x${sz} City & Training Agent...`;
-            const res = await fetch(`/api/generate_city?size=${sz}`);
+            const r = Math.max(4, Math.min(15, parseInt(document.getElementById('inputRows').value) || 8));
+            const c = Math.max(4, Math.min(15, parseInt(document.getElementById('inputCols').value) || 8));
+            document.getElementById('statusText').textContent = `Generating ${r}x${c} City & Optimizing Route...`;
+            const res = await fetch(`/api/generate_city?rows=${r}&cols=${c}`);
             currentData = await res.json();
+            updateMissionDropdown(currentData.stations);
             render();
             updateUI();
-            document.getElementById('statusText').textContent = `New ${sz}x${sz} City generated & trained successfully!`;
+            document.getElementById('statusText').textContent = `New ${r}x${c} City generated & route optimized!`;
+        }
+
+        function updateMissionDropdown(stations) {
+            if (!stations || stations.length < 2) return;
+            const sel = document.getElementById('missionSelect');
+            sel.innerHTML = '<option value="random">🎲 Random Spawn Locations</option>';
+            for (let i = 0; i < stations.length; i++) {
+                const next = (i + 1) % stations.length;
+                sel.innerHTML += `<option value="${i},${next}">Station ${i} -> Station ${next}</option>`;
+            }
+            if (stations.length >= 3) {
+                sel.innerHTML += '<option value="0,2">Station 0 -> Station 2</option>';
+            }
         }
 
         async function applyMission() {
@@ -501,43 +521,45 @@ HTML_PAGE = """<!DOCTYPE html>
             if (!currentData) return;
             const rows = currentData.rows;
             const cols = currentData.cols;
-            const cellSize = canvas.width / cols;
+            const cellW = canvas.width / cols;
+            const cellH = canvas.height / rows;
+            const minCell = Math.min(cellW, cellH);
 
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
             // Draw Grid & Cells
             for (let r = 0; r < rows; r++) {
                 for (let c = 0; c < cols; c++) {
-                    const x = c * cellSize;
-                    const y = r * cellSize;
+                    const x = c * cellW;
+                    const y = r * cellH;
 
                     if (currentData.obstacles[r][c]) {
                         ctx.fillStyle = '#334155';
-                        ctx.fillRect(x + 1, y + 1, cellSize - 2, cellSize - 2);
+                        ctx.fillRect(x + 1, y + 1, cellW - 2, cellH - 2);
                         ctx.fillStyle = '#64748b';
-                        ctx.font = 'bold 16px Inter';
+                        ctx.font = `bold ${Math.max(10, Math.floor(minCell * 0.4))}px Inter`;
                         ctx.textAlign = 'center';
                         ctx.textBaseline = 'middle';
-                        ctx.fillText('#', x + cellSize/2, y + cellSize/2);
+                        ctx.fillText('#', x + cellW/2, y + cellH/2);
                     } else if (currentData.traffic[r][c] === 2) {
                         ctx.fillStyle = '#7f1d1d';
-                        ctx.fillRect(x + 1, y + 1, cellSize - 2, cellSize - 2);
+                        ctx.fillRect(x + 1, y + 1, cellW - 2, cellH - 2);
                         ctx.fillStyle = '#fca5a5';
-                        ctx.font = 'bold 10px Inter';
+                        ctx.font = `bold ${Math.max(8, Math.floor(minCell * 0.25))}px Inter`;
                         ctx.textAlign = 'center';
                         ctx.textBaseline = 'middle';
-                        ctx.fillText('HIGH', x + cellSize/2, y + cellSize/2);
+                        ctx.fillText('HIGH', x + cellW/2, y + cellH/2);
                     } else if (currentData.traffic[r][c] === 1) {
                         ctx.fillStyle = '#7c2d12';
-                        ctx.fillRect(x + 1, y + 1, cellSize - 2, cellSize - 2);
+                        ctx.fillRect(x + 1, y + 1, cellW - 2, cellH - 2);
                         ctx.fillStyle = '#fed7aa';
-                        ctx.font = 'bold 10px Inter';
+                        ctx.font = `bold ${Math.max(8, Math.floor(minCell * 0.25))}px Inter`;
                         ctx.textAlign = 'center';
                         ctx.textBaseline = 'middle';
-                        ctx.fillText('MED', x + cellSize/2, y + cellSize/2);
+                        ctx.fillText('MED', x + cellW/2, y + cellH/2);
                     } else {
                         ctx.fillStyle = '#1e293b';
-                        ctx.fillRect(x + 1, y + 1, cellSize - 2, cellSize - 2);
+                        ctx.fillRect(x + 1, y + 1, cellW - 2, cellH - 2);
                     }
                 }
             }
@@ -546,32 +568,34 @@ HTML_PAGE = """<!DOCTYPE html>
             if (currentData.history && currentData.history.length > 1) {
                 ctx.beginPath();
                 ctx.strokeStyle = '#38bdf8';
-                ctx.lineWidth = 3.5;
+                ctx.lineWidth = Math.max(2, Math.min(4, minCell * 0.08));
                 ctx.lineCap = 'round';
                 for (let i = 0; i < currentData.history.length; i++) {
                     const [hr, hc] = currentData.history[i];
-                    const hx = hc * cellSize + cellSize / 2;
-                    const hy = hr * cellSize + cellSize / 2;
+                    const hx = hc * cellW + cellW / 2;
+                    const hy = hr * cellH + cellH / 2;
                     if (i === 0) ctx.moveTo(hx, hy);
                     else ctx.lineTo(hx, hy);
                 }
                 ctx.stroke();
             }
 
+            const rad = Math.max(6, minCell * 0.32);
+
             // Draw Passenger
             if (!currentData.passenger_picked) {
                 const [pr, pc] = currentData.passenger_pos;
-                const px = pc * cellSize + cellSize / 2;
-                const py = pr * cellSize + cellSize / 2;
+                const px = pc * cellW + cellW / 2;
+                const py = pr * cellH + cellH / 2;
                 ctx.beginPath();
-                ctx.arc(px, py, cellSize * 0.32, 0, Math.PI * 2);
+                ctx.arc(px, py, rad, 0, Math.PI * 2);
                 ctx.fillStyle = '#10b981';
                 ctx.fill();
                 ctx.lineWidth = 2.5;
                 ctx.strokeStyle = '#059669';
                 ctx.stroke();
                 ctx.fillStyle = 'white';
-                ctx.font = 'bold 14px Inter';
+                ctx.font = `bold ${Math.max(9, Math.floor(minCell * 0.32))}px Inter`;
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
                 ctx.fillText('P', px, py);
@@ -579,33 +603,33 @@ HTML_PAGE = """<!DOCTYPE html>
 
             // Draw Destination
             const [dr, dc] = currentData.dest_pos;
-            const dx = dc * cellSize + cellSize / 2;
-            const dy = dr * cellSize + cellSize / 2;
+            const dx = dc * cellW + cellW / 2;
+            const dy = dr * cellH + cellH / 2;
             ctx.beginPath();
-            ctx.rect(dx - cellSize * 0.3, dy - cellSize * 0.3, cellSize * 0.6, cellSize * 0.6);
+            ctx.rect(dx - rad * 0.9, dy - rad * 0.9, rad * 1.8, rad * 1.8);
             ctx.fillStyle = '#ef4444';
             ctx.fill();
             ctx.lineWidth = 2.5;
             ctx.strokeStyle = '#b91c1c';
             ctx.stroke();
             ctx.fillStyle = 'white';
-            ctx.font = 'bold 14px Inter';
+            ctx.font = `bold ${Math.max(9, Math.floor(minCell * 0.32))}px Inter`;
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
             ctx.fillText('D', dx, dy);
 
             // Draw Taxi
             const [tr, tc] = currentData.taxi_pos;
-            const tx = tc * cellSize + cellSize / 2;
-            const ty = tr * cellSize + cellSize / 2;
+            const tx = tc * cellW + cellW / 2;
+            const ty = tr * cellH + cellH / 2;
             ctx.beginPath();
-            ctx.arc(tx, ty, cellSize * 0.35, 0, Math.PI * 2);
+            ctx.arc(tx, ty, rad * 1.1, 0, Math.PI * 2);
             ctx.fillStyle = '#f59e0b';
             ctx.fill();
             ctx.lineWidth = 3;
             ctx.strokeStyle = '#d97706';
             ctx.stroke();
-            ctx.font = '20px sans-serif';
+            ctx.font = `${Math.max(12, Math.floor(minCell * 0.45))}px sans-serif`;
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
             ctx.fillText(currentData.passenger_picked ? '🚕' : '🚖', tx, ty);
@@ -661,8 +685,9 @@ class RequestHandler(BaseHTTPRequestHandler):
             self.send_json({"active_policy": SIM.active_policy})
 
         elif path == "/api/generate_city":
-            size = int(query.get("size", ["8"])[0])
-            payload = SIM.generate_world(size)
+            rows = int(query.get("rows", query.get("size", ["8"]))[0])
+            cols = int(query.get("cols", [str(rows)])[0])
+            payload = SIM.generate_world(rows, cols)
             self.send_json(payload)
 
         else:
