@@ -89,14 +89,21 @@ class SimulationManager:
         return self.get_payload()
 
     def step(self):
+        state_before = self.current_state
         if self.active_policy == "q_learning":
-            action = self.agent.select_action(self.current_state, explore=False)
+            action = self.agent.select_action(state_before, explore=False)
         elif self.active_policy == "shortest_path":
-            action = self.shortest_agent.select_action(self.current_state, env=self.env)
+            action = self.shortest_agent.select_action(state_before, env=self.env)
         else:
-            action = self.random_agent.select_action(self.current_state)
+            action = self.random_agent.select_action(state_before)
 
         next_state, reward, term, trunc, info = self.env.step(action)
+        done = term or trunc
+
+        # Live Continual Online Learning: Agent updates Q-table from experience in real-time
+        if self.active_policy == "q_learning":
+            self.agent.update(state_before, action, reward, next_state, done)
+
         self.current_state = next_state
         self.total_reward += reward
         self.history.append(self.env.taxi_pos)
