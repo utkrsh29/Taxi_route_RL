@@ -32,8 +32,8 @@ class RewardConfig:
     boundary_penalty: float = -5.0       # Penalty for attempting to move off the grid
     obstacle_penalty: float = -5.0       # Penalty for attempting to hit a wall/obstacle
     traffic_low_penalty: float = 0.0     # Extra penalty for moving through LOW traffic
-    traffic_med_penalty: float = -2.0    # Extra penalty for moving through MEDIUM traffic
-    traffic_high_penalty: float = -4.0   # Extra penalty for moving through HIGH traffic
+    traffic_med_penalty: float = -3.0    # Extra penalty for moving through MEDIUM traffic (total step cost = -4.0)
+    traffic_high_penalty: float = -8.0   # Extra penalty for moving through HIGH traffic (total step cost = -9.0)
     pickup_reward: float = 20.0          # Reward upon picking up passenger
     delivery_reward: float = 100.0       # Reward upon successfully reaching destination with passenger
     timeout_penalty: float = -10.0       # Penalty when episode hits max steps without delivery

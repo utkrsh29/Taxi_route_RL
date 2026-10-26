@@ -149,7 +149,7 @@ class QLearningAgent:
                 nr, nc = curr[0] + dr, curr[1] + dc
                 if env.grid.is_road(nr, nc):
                     traf = traffic_grid[curr[0], curr[1]]
-                    step_cost = 1.0 + (2.0 if traf == 1 else 4.0 if traf == 2 else 0.0)
+                    step_cost = 1.0 + (3.0 if traf == 1 else 8.0 if traf == 2 else 0.0)
                     new_cost = c + step_cost
                     if (nr, nc) not in costs or new_cost < costs[(nr, nc)]:
                         costs[(nr, nc)] = new_cost
@@ -168,7 +168,9 @@ class QLearningAgent:
                     for act, (dr, dc) in enumerate([(-1, 0), (1, 0), (0, -1), (0, 1)]):
                         nr, nc = r + dr, c + dc
                         if (nr, nc) in costs:
-                            q_vals[act] = -costs[(nr, nc)]
+                            traf = traffic_grid[nr, nc]
+                            immediate_cost = 1.0 + (3.0 if traf == 1 else 8.0 if traf == 2 else 0.0)
+                            q_vals[act] = -immediate_cost - costs[(nr, nc)]
                         else:
                             q_vals[act] = -999.0
 
