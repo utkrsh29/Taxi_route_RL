@@ -136,245 +136,486 @@ HTML_PAGE = """<!DOCTYPE html>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>RL Taxi Route Optimization | Dynamic City</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+    <title>TransitRL • Taxi Route Optimization & Dispatch Console</title>
     <style>
         :root {
-            --bg-dark: #090d16;
-            --card-bg: rgba(22, 30, 49, 0.75);
-            --border: rgba(255, 255, 255, 0.1);
-            --accent-blue: #3b82f6;
-            --accent-green: #10b981;
-            --accent-yellow: #f59e0b;
-            --accent-red: #ef4444;
-            --text-main: #f8fafc;
-            --text-muted: #94a3b8;
+            --bg-base: #0b0f17;
+            --bg-surface: #121824;
+            --bg-elevated: #182030;
+            --bg-subtle: #1e293b;
+            --border: #263348;
+            --border-active: #3b82f6;
+            --text-main: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --text-dim: #64748b;
+            --accent-cyan: #0284c7;
+            --accent-blue: #2563eb;
+            --accent-emerald: #10b981;
+            --accent-amber: #f59e0b;
+            --accent-rose: #f43f5e;
+            --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", Consolas, monospace;
         }
+
         * { box-sizing: border-box; margin: 0; padding: 0; }
+
         body {
-            font-family: 'Inter', sans-serif;
-            background: radial-gradient(circle at top, #131d35 0%, var(--bg-dark) 100%);
+            font-family: var(--font-sans);
+            background: var(--bg-base);
             color: var(--text-main);
             min-height: 100vh;
             display: flex;
             flex-direction: column;
+            line-height: 1.45;
+            -webkit-font-smoothing: antialiased;
         }
+
+        /* Top Navigation Bar */
         header {
-            padding: 1.2rem 2.5rem;
-            background: rgba(15, 23, 42, 0.85);
-            backdrop-filter: blur(12px);
+            background: var(--bg-surface);
             border-bottom: 1px solid var(--border);
+            padding: 0.85rem 2rem;
             display: flex;
             align-items: center;
             justify-content: space-between;
         }
-        .logo-group { display: flex; align-items: center; gap: 0.8rem; }
-        .logo-group h1 { font-size: 1.35rem; font-weight: 800; letter-spacing: -0.02em; }
-        .badge {
-            background: rgba(59, 130, 246, 0.2);
-            color: #60a5fa;
-            border: 1px solid rgba(59, 130, 246, 0.3);
-            padding: 0.25rem 0.6rem;
-            border-radius: 9999px;
-            font-size: 0.75rem;
-            font-weight: 700;
+        .nav-brand {
+            display: flex;
+            align-items: center;
+            gap: 0.85rem;
         }
+        .brand-badge {
+            background: #1e293b;
+            border: 1px solid var(--border);
+            color: #38bdf8;
+            font-family: var(--font-mono);
+            font-weight: 700;
+            font-size: 0.8rem;
+            padding: 0.25rem 0.55rem;
+            border-radius: 6px;
+            letter-spacing: 0.05em;
+        }
+        .brand-info h1 {
+            font-size: 1.05rem;
+            font-weight: 700;
+            color: var(--text-main);
+            letter-spacing: -0.01em;
+        }
+        .brand-info p {
+            font-size: 0.76rem;
+            color: var(--text-dim);
+            letter-spacing: 0.01em;
+        }
+        .nav-status {
+            display: flex;
+            align-items: center;
+            gap: 1.25rem;
+        }
+        .status-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.45rem;
+            font-size: 0.78rem;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+        .dot-live {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--accent-emerald);
+            box-shadow: 0 0 8px rgba(16, 185, 129, 0.6);
+        }
+
+        /* Layout Grid */
         main {
             flex: 1;
             display: grid;
-            grid-template-columns: 1fr 380px;
+            grid-template-columns: minmax(560px, 1fr) 390px;
             gap: 1.5rem;
-            padding: 1.5rem 2.5rem;
-            max-width: 1400px;
+            padding: 1.5rem 2rem;
+            max-width: 1440px;
             width: 100%;
             margin: 0 auto;
         }
-        .card {
-            background: var(--card-bg);
-            backdrop-filter: blur(16px);
+
+        /* Cards & Containers */
+        .panel {
+            background: var(--bg-surface);
             border: 1px solid var(--border);
-            border-radius: 16px;
-            padding: 1.5rem;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+            border-radius: 12px;
+            overflow: hidden;
         }
-        .canvas-container {
+        .panel-header {
+            padding: 0.85rem 1.25rem;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: rgba(18, 24, 36, 0.5);
+        }
+        .panel-title {
+            font-size: 0.82rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-secondary);
+        }
+        .panel-body {
+            padding: 1.25rem;
+        }
+
+        /* Canvas Viewport */
+        .viewport-wrapper {
             display: flex;
             flex-direction: column;
             align-items: center;
-            justify-content: center;
+            padding: 1.25rem;
         }
         #cityCanvas {
-            background: #0b1120;
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            border-radius: 12px;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);
+            background: #0d121c;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            display: block;
+            image-rendering: pixelated;
         }
-        .legend-bar {
+
+        /* Map Legend */
+        .legend-row {
             display: flex;
             flex-wrap: wrap;
             gap: 1rem;
             margin-top: 1rem;
-            font-size: 0.82rem;
-            font-weight: 600;
+            font-size: 0.78rem;
+            color: var(--text-secondary);
+            width: 100%;
+            max-width: 560px;
+            justify-content: center;
         }
-        .legend-item { display: flex; align-items: center; gap: 0.4rem; }
-        .legend-dot { width: 12px; height: 12px; border-radius: 4px; }
-        
-        .stat-grid {
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+        }
+        .legend-swatch {
+            width: 12px;
+            height: 12px;
+            border-radius: 3px;
+        }
+
+        /* Telemetry Cards */
+        .telemetry-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 0.75rem;
             margin-bottom: 1.25rem;
         }
-        .stat-box {
-            background: rgba(15, 23, 42, 0.6);
+        .telemetry-cell {
+            background: var(--bg-elevated);
             border: 1px solid var(--border);
-            border-radius: 10px;
+            border-radius: 8px;
             padding: 0.85rem;
         }
-        .stat-title { font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; font-weight: 700; }
-        .stat-val { font-size: 1.4rem; font-weight: 800; margin-top: 0.2rem; font-family: 'JetBrains Mono', monospace; }
-        
-        .control-group { margin-bottom: 1.25rem; }
-        .control-label { font-size: 0.8rem; font-weight: 700; color: var(--text-muted); margin-bottom: 0.4rem; display: block; text-transform: uppercase; }
+        .telemetry-label {
+            font-size: 0.72rem;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            color: var(--text-dim);
+            font-weight: 600;
+        }
+        .telemetry-value {
+            font-family: var(--font-mono);
+            font-size: 1.35rem;
+            font-weight: 700;
+            margin-top: 0.2rem;
+            color: var(--text-main);
+        }
+
+        /* Form Inputs & Controls */
+        .form-section {
+            margin-bottom: 1.25rem;
+        }
+        .section-label {
+            display: block;
+            font-size: 0.74rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-dim);
+            margin-bottom: 0.5rem;
+        }
+        .dim-input-group {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .dim-box {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            background: var(--bg-elevated);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 0.4rem 0.6rem;
+        }
+        .dim-box span {
+            font-size: 0.72rem;
+            font-weight: 600;
+            color: var(--text-dim);
+            margin-right: 0.4rem;
+            text-transform: uppercase;
+        }
+        .dim-box input {
+            width: 100%;
+            background: transparent;
+            border: none;
+            color: var(--text-main);
+            font-family: var(--font-mono);
+            font-size: 0.95rem;
+            font-weight: 700;
+            outline: none;
+            text-align: center;
+        }
         select, input[type=range] {
             width: 100%;
-            background: #0f172a;
+            background: var(--bg-elevated);
             border: 1px solid var(--border);
             color: var(--text-main);
-            padding: 0.65rem 0.8rem;
-            border-radius: 8px;
-            font-size: 0.9rem;
-            font-family: inherit;
+            padding: 0.6rem 0.75rem;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            font-family: var(--font-sans);
             outline: none;
         }
-        .btn-row { display: flex; gap: 0.6rem; margin-top: 0.8rem; }
-        button {
-            cursor: pointer;
-            border: none;
-            border-radius: 8px;
-            padding: 0.75rem 1rem;
-            font-weight: 700;
-            font-size: 0.9rem;
-            transition: all 0.2s;
+        select:focus, .dim-box:focus-within {
+            border-color: var(--border-active);
+        }
+
+        /* Segmented Policy Selector */
+        .policy-group {
             display: flex;
+            background: var(--bg-elevated);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 3px;
+            gap: 3px;
+        }
+        .policy-btn {
+            flex: 1;
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            font-size: 0.76rem;
+            font-weight: 600;
+            padding: 0.5rem 0.2rem;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+        .policy-btn.active {
+            background: #2563eb;
+            color: #ffffff;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+        }
+
+        /* Action Buttons */
+        .btn-row {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 0.75rem;
+        }
+        button.btn {
+            cursor: pointer;
+            border: 1px solid transparent;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            padding: 0.65rem 1rem;
+            transition: background 0.15s, border-color 0.15s;
+            display: inline-flex;
             align-items: center;
             justify-content: center;
             gap: 0.4rem;
         }
-        .btn-primary { background: var(--accent-blue); color: white; flex: 1; }
-        .btn-primary:hover { background: #2563eb; transform: translateY(-1px); }
-        .btn-success { background: var(--accent-green); color: white; flex: 1; }
-        .btn-success:hover { background: #059669; }
-        .btn-danger { background: var(--accent-red); color: white; flex: 1; }
-        .btn-secondary { background: #334155; color: white; flex: 1; }
-        .btn-secondary:hover { background: #475569; }
-        
-        .mission-status {
-            background: rgba(16, 185, 129, 0.15);
-            border: 1px solid rgba(16, 185, 129, 0.3);
-            border-radius: 8px;
-            padding: 0.75rem;
-            margin-top: 1rem;
-            font-size: 0.88rem;
-            font-weight: 600;
+        .btn-primary {
+            background: #2563eb;
+            color: white;
+            flex: 1;
+        }
+        .btn-primary:hover { background: #1d4ed8; }
+        .btn-stop {
+            background: #dc2626;
+            color: white;
+            flex: 1;
+        }
+        .btn-stop:hover { background: #b91c1c; }
+        .btn-outline {
+            background: var(--bg-elevated);
+            border-color: var(--border);
+            color: var(--text-main);
+            flex: 1;
+        }
+        .btn-outline:hover {
+            background: #222d40;
+            border-color: #3b4d68;
+        }
+        .btn-build {
+            background: #3b82f6;
+            color: white;
+            padding: 0.55rem 1rem;
+            font-size: 0.82rem;
+        }
+        .btn-build:hover { background: #2563eb; }
+
+        /* Status Callout Banner */
+        .mission-status-bar {
+            background: rgba(30, 41, 59, 0.6);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 0.75rem 1rem;
+            margin-top: 1.25rem;
+            font-size: 0.82rem;
+            font-weight: 500;
+            color: var(--text-secondary);
             display: flex;
             align-items: center;
-            gap: 0.5rem;
+            gap: 0.6rem;
+        }
+        .status-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #38bdf8;
         }
     </style>
 </head>
 <body>
     <header>
-        <div class="logo-group">
-            <span style="font-size: 1.6rem;">🚖</span>
-            <h1>RL Taxi Route Optimizer</h1>
-            <span class="badge">Continuous Assessment</span>
+        <div class="nav-brand">
+            <span class="brand-badge">TR-RL</span>
+            <div class="brand-info">
+                <h1>TransitRL Dispatch Console</h1>
+                <p>Urban Taxi Route Optimization • Tabular Q-Learning Engine</p>
+            </div>
         </div>
-        <div>
-            <span style="font-size: 0.85rem; color: var(--text-muted); font-weight: 600;">Custom Q-Learning (No Gym)</span>
+        <div class="nav-status">
+            <div class="status-pill"><span class="dot-live"></span> Engine Online</div>
+            <div class="status-pill" id="navGridDim" style="font-family: var(--font-mono);">8 × 8 Grid</div>
         </div>
     </header>
 
     <main>
-        <div class="card canvas-container">
-            <canvas id="cityCanvas" width="560" height="560"></canvas>
-            <div class="legend-bar">
-                <div class="legend-item"><div class="legend-dot" style="background: #f59e0b;"></div> Taxi (S)</div>
-                <div class="legend-item"><div class="legend-dot" style="background: #10b981;"></div> Passenger (P)</div>
-                <div class="legend-item"><div class="legend-dot" style="background: #ef4444;"></div> Destination (D)</div>
-                <div class="legend-item"><div class="legend-dot" style="background: #334155;"></div> Obstacle (#)</div>
-                <div class="legend-item"><div class="legend-dot" style="background: #c2410c;"></div> Medium Traffic</div>
-                <div class="legend-item"><div class="legend-dot" style="background: #991b1b;"></div> High Traffic</div>
+        <!-- Viewport Left Column -->
+        <div class="panel">
+            <div class="panel-header">
+                <span class="panel-title">City Spatial Matrix & Path Trajectory</span>
+                <span id="badgeTarget" style="font-size: 0.76rem; font-family: var(--font-mono); color: #38bdf8;">TARGET: PASSENGER PICKUP</span>
+            </div>
+            <div class="viewport-wrapper">
+                <canvas id="cityCanvas" width="560" height="560"></canvas>
+                <div class="legend-row">
+                    <div class="legend-item"><div class="legend-swatch" style="background: #f59e0b;"></div> Taxi Vehicle</div>
+                    <div class="legend-item"><div class="legend-swatch" style="background: #10b981;"></div> Pickup Station</div>
+                    <div class="legend-item"><div class="legend-swatch" style="background: #f43f5e;"></div> Destination Hub</div>
+                    <div class="legend-item"><div class="legend-swatch" style="background: #1e293b; border: 1px solid #334155;"></div> Building Block</div>
+                    <div class="legend-item"><div class="legend-swatch" style="background: #b45309;"></div> Moderate Traffic</div>
+                    <div class="legend-item"><div class="legend-swatch" style="background: #991b1b;"></div> Heavy Congestion</div>
+                </div>
             </div>
         </div>
 
-        <div class="card">
-            <div class="stat-grid">
-                <div class="stat-box">
-                    <div class="stat-title">Cumulative Reward</div>
-                    <div class="stat-val" id="statReward" style="color: #22c55e;">0.0</div>
-                </div>
-                <div class="stat-box">
-                    <div class="stat-title">Steps Taken</div>
-                    <div class="stat-val" id="statSteps">0</div>
-                </div>
+        <!-- Telemetry & Operations Panel Right Column -->
+        <div class="panel">
+            <div class="panel-header">
+                <span class="panel-title">Mission Control & Metrics</span>
             </div>
-
-            <div class="control-group">
-                <label class="control-label">City Dimensions (Rows × Cols, 4 - 15)</label>
-                <div style="display: flex; gap: 0.5rem; align-items: center;">
-                    <div style="flex: 1;">
-                        <input type="number" id="inputRows" min="4" max="15" value="8" style="text-align: center; font-weight: 700; font-size: 1rem; width: 100%;" title="Rows (4-15)">
+            <div class="panel-body">
+                <!-- Telemetry 2x2 Grid -->
+                <div class="telemetry-grid">
+                    <div class="telemetry-cell">
+                        <div class="telemetry-label">Cumulative Return</div>
+                        <div class="telemetry-value" id="statReward" style="color: #10b981;">0.0</div>
                     </div>
-                    <span style="color: var(--text-muted); font-size: 1.1rem; font-weight: bold;">×</span>
-                    <div style="flex: 1;">
-                        <input type="number" id="inputCols" min="4" max="15" value="8" style="text-align: center; font-weight: 700; font-size: 1rem; width: 100%;" title="Columns (4-15)">
+                    <div class="telemetry-cell">
+                        <div class="telemetry-label">Step Count</div>
+                        <div class="telemetry-value" id="statSteps">0</div>
                     </div>
-                    <button class="btn-primary" style="background: #8b5cf6; padding: 0.65rem 1rem;" onclick="generateCity()">🏗️ Build</button>
+                    <div class="telemetry-cell">
+                        <div class="telemetry-label">Vehicle Position</div>
+                        <div class="telemetry-value" id="statPos" style="font-size: 1.1rem; color: #93c5fd;">[0, 0]</div>
+                    </div>
+                    <div class="telemetry-cell">
+                        <div class="telemetry-label">Route Status</div>
+                        <div class="telemetry-value" id="statState" style="font-size: 0.95rem; color: #facc15;">Searching</div>
+                    </div>
                 </div>
-                <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.35rem;">Custom 2D layout: e.g. 6×12, 10×15, 15×15</div>
-            </div>
 
-            <div class="control-group">
-                <label class="control-label">Active Policy</label>
-                <select id="policySelect" onchange="changePolicy()">
-                    <option value="q_learning">Q-Learning Agent (Learned Policy)</option>
-                    <option value="shortest_path">Shortest-Path Baseline (BFS)</option>
-                    <option value="random">Random Policy Baseline</option>
-                </select>
-            </div>
+                <!-- Grid Dimension Builder -->
+                <div class="form-section">
+                    <label class="section-label">City Grid Dimensions (Rows × Cols: 4–15)</label>
+                    <div class="dim-input-group">
+                        <div class="dim-box">
+                            <span>R</span>
+                            <input type="number" id="inputRows" min="4" max="15" value="8">
+                        </div>
+                        <span style="color: var(--text-dim); font-weight: bold;">×</span>
+                        <div class="dim-box">
+                            <span>C</span>
+                            <input type="number" id="inputCols" min="4" max="15" value="8">
+                        </div>
+                        <button class="btn btn-build" onclick="generateCity()">Rebuild Grid</button>
+                    </div>
+                </div>
 
-            <div class="control-group">
-                <label class="control-label">Preset Transit Station Mission</label>
-                <select id="missionSelect" onchange="applyMission()">
-                    <option value="random">🎲 Random Spawn Locations</option>
-                    <option value="0,1">Airport (St 0) -> Downtown (St 1)</option>
-                    <option value="1,2">Downtown (St 1) -> Central Station (St 2)</option>
-                    <option value="2,3">Central Station (St 2) -> Suburb (St 3)</option>
-                    <option value="3,0">Suburb (St 3) -> Airport (St 0)</option>
-                    <option value="0,2">Airport (St 0) -> Central Station (St 2)</option>
-                </select>
-            </div>
+                <!-- Routing Policy Selector -->
+                <div class="form-section">
+                    <label class="section-label">Active Routing Policy</label>
+                    <div class="policy-group">
+                        <button class="policy-btn active" id="btnPolQ" onclick="setPolicy('q_learning')">Q-Learning (Optimal)</button>
+                        <button class="policy-btn" id="btnPolBFS" onclick="setPolicy('shortest_path')">Shortest Path (BFS)</button>
+                        <button class="policy-btn" id="btnPolRnd" onclick="setPolicy('random')">Random</button>
+                    </div>
+                </div>
 
-            <div class="control-group">
-                <label class="control-label">Playback Delay: <span id="speedVal">200ms</span></label>
-                <input type="range" id="speedSlider" min="50" max="600" value="200" oninput="updateSpeed(this.value)">
-            </div>
+                <!-- Scenario Selection -->
+                <div class="form-section">
+                    <label class="section-label">Transit Hub Mission Preset</label>
+                    <select id="missionSelect" onchange="applyMission()">
+                        <option value="random">Randomized Pickup & Destination</option>
+                        <option value="0,1">Hub 0 (Airport) -> Hub 1 (Downtown)</option>
+                        <option value="1,2">Hub 1 (Downtown) -> Hub 2 (Central)</option>
+                        <option value="2,3">Hub 2 (Central) -> Hub 3 (Suburb)</option>
+                        <option value="3,0">Hub 3 (Suburb) -> Hub 0 (Airport)</option>
+                        <option value="0,2">Hub 0 (Airport) -> Hub 2 (Central)</option>
+                    </select>
+                </div>
 
-            <div class="btn-row">
-                <button class="btn-primary" id="btnPlay" onclick="togglePlay()">▶ Auto Play</button>
-                <button class="btn-secondary" onclick="stepSim()">⏩ Step</button>
-            </div>
-            <div class="btn-row">
-                <button class="btn-primary" style="width: 100%; background: #0284c7;" onclick="restartSim()">↺ Reset Taxi to Start (Same Mission)</button>
-            </div>
-            <div class="btn-row">
-                <button class="btn-secondary" style="width: 100%;" onclick="resetSim()">🎲 New Random Mission</button>
-            </div>
+                <!-- Playback Speed -->
+                <div class="form-section">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem;">
+                        <label class="section-label" style="margin-bottom: 0;">Step Delay</label>
+                        <span id="speedVal" style="font-family: var(--font-mono); font-size: 0.8rem; color: var(--text-secondary);">200 ms</span>
+                    </div>
+                    <input type="range" id="speedSlider" min="50" max="600" value="200" oninput="updateSpeed(this.value)">
+                </div>
 
-            <div class="mission-status" id="missionStatus">
-                <span>📍</span> <span id="statusText">Ready to start navigation</span>
+                <!-- Execution Controls -->
+                <div class="btn-row">
+                    <button class="btn btn-primary" id="btnPlay" onclick="togglePlay()">Start Simulation</button>
+                    <button class="btn btn-outline" onclick="stepSim()">Single Step</button>
+                </div>
+                <div class="btn-row">
+                    <button class="btn btn-outline" style="width: 100%;" onclick="restartSim()">Replay Scenario (Keep Traffic)</button>
+                </div>
+                <div class="btn-row">
+                    <button class="btn btn-outline" style="width: 100%;" onclick="resetSim()">New Random Mission</button>
+                </div>
+
+                <!-- Real-time Status Callout -->
+                <div class="mission-status-bar" id="missionStatus">
+                    <span class="status-indicator" id="statusDot"></span>
+                    <span id="statusText">System initialized and ready for deployment.</span>
+                </div>
             </div>
         </div>
     </main>
@@ -384,23 +625,35 @@ HTML_PAGE = """<!DOCTYPE html>
         let playInterval = null;
         let simSpeed = 200;
         let currentData = null;
+        let activePolicy = 'q_learning';
 
         const canvas = document.getElementById('cityCanvas');
         const ctx = canvas.getContext('2d');
 
         async function fetchState() {
-            const res = await fetch('/api/state');
-            currentData = await res.json();
-            render();
-            updateUI();
+            try {
+                const res = await fetch('/api/state');
+                currentData = await res.json();
+                activePolicy = currentData.active_policy || 'q_learning';
+                syncPolicyUI();
+                render();
+                updateUI();
+            } catch (e) {
+                console.error("Failed to fetch state:", e);
+            }
         }
 
         async function stepSim() {
-            const res = await fetch('/api/step');
-            currentData = await res.json();
-            render();
-            updateUI();
-            if (currentData.terminated || currentData.truncated) {
+            try {
+                const res = await fetch('/api/step');
+                currentData = await res.json();
+                render();
+                updateUI();
+                if (currentData.terminated || currentData.truncated) {
+                    stopPlay();
+                }
+            } catch (e) {
+                console.error("Step error:", e);
                 stopPlay();
             }
         }
@@ -411,6 +664,7 @@ HTML_PAGE = """<!DOCTYPE html>
             currentData = await res.json();
             render();
             updateUI();
+            document.getElementById('statusText').textContent = 'Taxi reset to starting hub; traffic conditions strictly preserved.';
         }
 
         async function resetSim() {
@@ -419,31 +673,32 @@ HTML_PAGE = """<!DOCTYPE html>
             currentData = await res.json();
             render();
             updateUI();
+            document.getElementById('statusText').textContent = 'New random mission initialized.';
         }
 
         async function generateCity() {
             stopPlay();
             const r = Math.max(4, Math.min(15, parseInt(document.getElementById('inputRows').value) || 8));
             const c = Math.max(4, Math.min(15, parseInt(document.getElementById('inputCols').value) || 8));
-            document.getElementById('statusText').textContent = `Generating ${r}x${c} City & Optimizing Route...`;
+            document.getElementById('statusText').textContent = `Synthesizing ${r}x${c} city grid topology & pre-seeding potentials...`;
             const res = await fetch(`/api/generate_city?rows=${r}&cols=${c}`);
             currentData = await res.json();
             updateMissionDropdown(currentData.stations);
             render();
             updateUI();
-            document.getElementById('statusText').textContent = `New ${r}x${c} City generated & route optimized!`;
+            document.getElementById('statusText').textContent = `New ${r}x${c} topology built; optimal route policy calibrated.`;
         }
 
         function updateMissionDropdown(stations) {
             if (!stations || stations.length < 2) return;
             const sel = document.getElementById('missionSelect');
-            sel.innerHTML = '<option value="random">🎲 Random Spawn Locations</option>';
+            sel.innerHTML = '<option value="random">Randomized Pickup & Destination</option>';
             for (let i = 0; i < stations.length; i++) {
                 const next = (i + 1) % stations.length;
-                sel.innerHTML += `<option value="${i},${next}">Station ${i} -> Station ${next}</option>`;
+                sel.innerHTML += `<option value="${i},${next}">Hub ${i} -> Hub ${next}</option>`;
             }
             if (stations.length >= 3) {
-                sel.innerHTML += '<option value="0,2">Station 0 -> Station 2</option>';
+                sel.innerHTML += '<option value="0,2">Hub 0 -> Hub 2</option>';
             }
         }
 
@@ -461,10 +716,16 @@ HTML_PAGE = """<!DOCTYPE html>
             updateUI();
         }
 
-        async function changePolicy() {
-            const pol = document.getElementById('policySelect').value;
+        async function setPolicy(pol) {
+            activePolicy = pol;
             await fetch(`/api/policy?set=${pol}`);
-            if (currentData) currentData.active_policy = pol;
+            syncPolicyUI();
+        }
+
+        function syncPolicyUI() {
+            document.getElementById('btnPolQ').className = 'policy-btn ' + (activePolicy === 'q_learning' ? 'active' : '');
+            document.getElementById('btnPolBFS').className = 'policy-btn ' + (activePolicy === 'shortest_path' ? 'active' : '');
+            document.getElementById('btnPolRnd').className = 'policy-btn ' + (activePolicy === 'random' ? 'active' : '');
         }
 
         function togglePlay() {
@@ -477,21 +738,23 @@ HTML_PAGE = """<!DOCTYPE html>
 
         function startPlay() {
             isPlaying = true;
-            document.getElementById('btnPlay').textContent = '⏸ Pause';
-            document.getElementById('btnPlay').className = 'btn-danger';
+            const btn = document.getElementById('btnPlay');
+            btn.textContent = 'Pause Simulation';
+            btn.className = 'btn btn-stop';
             playInterval = setInterval(stepSim, simSpeed);
         }
 
         function stopPlay() {
             isPlaying = false;
             clearInterval(playInterval);
-            document.getElementById('btnPlay').textContent = '▶ Auto Play';
-            document.getElementById('btnPlay').className = 'btn-primary';
+            const btn = document.getElementById('btnPlay');
+            btn.textContent = 'Start Simulation';
+            btn.className = 'btn btn-primary';
         }
 
         function updateSpeed(val) {
             simSpeed = parseInt(val);
-            document.getElementById('speedVal').textContent = val + 'ms';
+            document.getElementById('speedVal').textContent = val + ' ms';
             if (isPlaying) {
                 clearInterval(playInterval);
                 playInterval = setInterval(stepSim, simSpeed);
@@ -500,20 +763,54 @@ HTML_PAGE = """<!DOCTYPE html>
 
         function updateUI() {
             if (!currentData) return;
+
+            // Header dim
+            document.getElementById('navGridDim').textContent = `${currentData.rows} × ${currentData.cols} Grid`;
+
+            // Telemetry
             const rewEl = document.getElementById('statReward');
-            rewEl.textContent = currentData.total_reward;
-            rewEl.style.color = currentData.total_reward >= 0 ? '#22c55e' : '#f87171';
+            rewEl.textContent = (currentData.total_reward >= 0 ? '+' : '') + currentData.total_reward.toFixed(1);
+            rewEl.style.color = currentData.total_reward >= 0 ? '#10b981' : '#f43f5e';
+
             document.getElementById('statSteps').textContent = currentData.steps;
 
+            if (currentData.taxi_pos) {
+                document.getElementById('statPos').textContent = `[${currentData.taxi_pos[0]}, ${currentData.taxi_pos[1]}]`;
+            }
+
+            const stateEl = document.getElementById('statState');
+            const targetBadge = document.getElementById('badgeTarget');
+            const dot = document.getElementById('statusDot');
             const stText = document.getElementById('statusText');
+
             if (currentData.terminated) {
-                stText.textContent = '🎉 Mission Accomplished! Delivered successfully.';
+                stateEl.textContent = 'Completed';
+                stateEl.style.color = '#10b981';
+                targetBadge.textContent = 'MISSION ACCOMPLISHED';
+                targetBadge.style.color = '#10b981';
+                dot.style.background = '#10b981';
+                stText.textContent = 'Destination reached successfully. Passenger transit completed.';
             } else if (currentData.truncated) {
-                stText.textContent = '⚠️ Timeout! Hit 100 max steps.';
+                stateEl.textContent = 'Timeout';
+                stateEl.style.color = '#f43f5e';
+                targetBadge.textContent = 'STEP LIMIT EXCEEDED';
+                targetBadge.style.color = '#f43f5e';
+                dot.style.background = '#f43f5e';
+                stText.textContent = 'Navigation exceeded step horizon without reaching destination.';
             } else if (currentData.passenger_picked) {
-                stText.textContent = 'Passenger on-board 🚕 -> Navigating to Destination';
+                stateEl.textContent = 'In Transit';
+                stateEl.style.color = '#38bdf8';
+                targetBadge.textContent = 'TARGET: DESTINATION HUB';
+                targetBadge.style.color = '#f43f5e';
+                dot.style.background = '#38bdf8';
+                stText.textContent = 'Passenger on board; routing vehicle to final destination hub.';
             } else {
-                stText.textContent = 'Navigating to Passenger Pickup 👤';
+                stateEl.textContent = 'En Route';
+                stateEl.style.color = '#facc15';
+                targetBadge.textContent = 'TARGET: PASSENGER PICKUP';
+                targetBadge.style.color = '#10b981';
+                dot.style.background = '#facc15';
+                stText.textContent = 'Navigating towards passenger pickup coordinates.';
             }
         }
 
@@ -527,49 +824,97 @@ HTML_PAGE = """<!DOCTYPE html>
 
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            // Draw Grid & Cells
+            // 1. Draw Streets, Buildings & Traffic Congestion
             for (let r = 0; r < rows; r++) {
                 for (let c = 0; c < cols; c++) {
                     const x = c * cellW;
                     const y = r * cellH;
 
                     if (currentData.obstacles[r][c]) {
-                        ctx.fillStyle = '#334155';
+                        // Architectural building block with diagonal hatch
+                        ctx.fillStyle = '#141a24';
                         ctx.fillRect(x + 1, y + 1, cellW - 2, cellH - 2);
-                        ctx.fillStyle = '#64748b';
-                        ctx.font = `bold ${Math.max(10, Math.floor(minCell * 0.4))}px Inter`;
-                        ctx.textAlign = 'center';
-                        ctx.textBaseline = 'middle';
-                        ctx.fillText('#', x + cellW/2, y + cellH/2);
-                    } else if (currentData.traffic[r][c] === 2) {
-                        ctx.fillStyle = '#7f1d1d';
-                        ctx.fillRect(x + 1, y + 1, cellW - 2, cellH - 2);
-                        ctx.fillStyle = '#fca5a5';
-                        ctx.font = `bold ${Math.max(8, Math.floor(minCell * 0.25))}px Inter`;
-                        ctx.textAlign = 'center';
-                        ctx.textBaseline = 'middle';
-                        ctx.fillText('HIGH', x + cellW/2, y + cellH/2);
-                    } else if (currentData.traffic[r][c] === 1) {
-                        ctx.fillStyle = '#7c2d12';
-                        ctx.fillRect(x + 1, y + 1, cellW - 2, cellH - 2);
-                        ctx.fillStyle = '#fed7aa';
-                        ctx.font = `bold ${Math.max(8, Math.floor(minCell * 0.25))}px Inter`;
-                        ctx.textAlign = 'center';
-                        ctx.textBaseline = 'middle';
-                        ctx.fillText('MED', x + cellW/2, y + cellH/2);
+                        ctx.strokeStyle = '#222c3d';
+                        ctx.lineWidth = 1;
+                        ctx.strokeRect(x + 1, y + 1, cellW - 2, cellH - 2);
+
+                        // Subtle diagonal cross
+                        ctx.beginPath();
+                        ctx.strokeStyle = '#1d2536';
+                        ctx.moveTo(x + 2, y + 2);
+                        ctx.lineTo(x + cellW - 2, y + cellH - 2);
+                        ctx.moveTo(x + cellW - 2, y + 2);
+                        ctx.lineTo(x + 2, y + cellH - 2);
+                        ctx.stroke();
                     } else {
-                        ctx.fillStyle = '#1e293b';
+                        // Street cell
+                        let roadColor = '#101622';
+                        let borderColor = '#1c2536';
+                        let tag = null;
+                        let tagColor = '';
+
+                        if (currentData.traffic[r][c] === 2) {
+                            roadColor = '#2b1015';
+                            borderColor = '#4d1c24';
+                            tag = 'HIGH';
+                            tagColor = '#f87171';
+                        } else if (currentData.traffic[r][c] === 1) {
+                            roadColor = '#271b10';
+                            borderColor = '#4a2f16';
+                            tag = 'MED';
+                            tagColor = '#fbbf24';
+                        }
+
+                        ctx.fillStyle = roadColor;
                         ctx.fillRect(x + 1, y + 1, cellW - 2, cellH - 2);
+                        ctx.strokeStyle = borderColor;
+                        ctx.lineWidth = 1;
+                        ctx.strokeRect(x + 1, y + 1, cellW - 2, cellH - 2);
+
+                        // Traffic label tag if cell is congested
+                        if (tag && minCell >= 24) {
+                            ctx.fillStyle = tagColor;
+                            ctx.font = `600 ${Math.max(8, Math.floor(minCell * 0.22))}px ui-monospace, monospace`;
+                            ctx.textAlign = 'center';
+                            ctx.textBaseline = 'middle';
+                            ctx.fillText(tag, x + cellW / 2, y + cellH / 2);
+                        }
                     }
                 }
             }
 
-            // Draw Trajectory line
+            // 2. Draw Transit Station Waypoint Markers
+            if (currentData.stations) {
+                currentData.stations.forEach((st, idx) => {
+                    const sx = st[1] * cellW + cellW / 2;
+                    const sy = st[0] * cellH + cellH / 2;
+                    const stRad = Math.max(7, minCell * 0.3);
+
+                    ctx.beginPath();
+                    ctx.arc(sx, sy, stRad, 0, Math.PI * 2);
+                    ctx.fillStyle = 'rgba(51, 65, 85, 0.4)';
+                    ctx.fill();
+                    ctx.strokeStyle = '#475569';
+                    ctx.lineWidth = 1;
+                    ctx.stroke();
+
+                    if (minCell >= 22) {
+                        ctx.fillStyle = '#94a3b8';
+                        ctx.font = `600 ${Math.max(8, Math.floor(minCell * 0.2))}px ui-monospace, monospace`;
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'middle';
+                        ctx.fillText(`S${idx}`, sx, sy);
+                    }
+                });
+            }
+
+            // 3. Draw Vehicle Trajectory Path
             if (currentData.history && currentData.history.length > 1) {
                 ctx.beginPath();
                 ctx.strokeStyle = '#38bdf8';
-                ctx.lineWidth = Math.max(2, Math.min(4, minCell * 0.08));
+                ctx.lineWidth = Math.max(2, Math.min(3.5, minCell * 0.08));
                 ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
                 for (let i = 0; i < currentData.history.length; i++) {
                     const [hr, hc] = currentData.history[i];
                     const hx = hc * cellW + cellW / 2;
@@ -578,61 +923,117 @@ HTML_PAGE = """<!DOCTYPE html>
                     else ctx.lineTo(hx, hy);
                 }
                 ctx.stroke();
+
+                // Small trajectory breadcrumb dots
+                ctx.fillStyle = '#0284c7';
+                for (let i = 0; i < currentData.history.length - 1; i++) {
+                    const [hr, hc] = currentData.history[i];
+                    const hx = hc * cellW + cellW / 2;
+                    const hy = hr * cellH + cellH / 2;
+                    ctx.beginPath();
+                    ctx.arc(hx, hy, 2, 0, Math.PI * 2);
+                    ctx.fill();
+                }
             }
 
             const rad = Math.max(6, minCell * 0.32);
 
-            // Draw Passenger
+            // 4. Draw Passenger Pickup Location (Clean Emerald Target)
             if (!currentData.passenger_picked) {
                 const [pr, pc] = currentData.passenger_pos;
                 const px = pc * cellW + cellW / 2;
                 const py = pr * cellH + cellH / 2;
+
+                // Outer halo
+                ctx.beginPath();
+                ctx.arc(px, py, rad * 1.25, 0, Math.PI * 2);
+                ctx.strokeStyle = 'rgba(16, 185, 129, 0.35)';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+
+                // Core marker
                 ctx.beginPath();
                 ctx.arc(px, py, rad, 0, Math.PI * 2);
                 ctx.fillStyle = '#10b981';
                 ctx.fill();
-                ctx.lineWidth = 2.5;
                 ctx.strokeStyle = '#059669';
+                ctx.lineWidth = 1.5;
                 ctx.stroke();
-                ctx.fillStyle = 'white';
-                ctx.font = `bold ${Math.max(9, Math.floor(minCell * 0.32))}px Inter`;
+
+                // Center crosshair / label
+                ctx.fillStyle = '#ffffff';
+                ctx.font = `700 ${Math.max(9, Math.floor(minCell * 0.3))}px var(--font-sans)`;
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
                 ctx.fillText('P', px, py);
             }
 
-            // Draw Destination
+            // 5. Draw Destination Hub (Clean Rose Target Box)
             const [dr, dc] = currentData.dest_pos;
             const dx = dc * cellW + cellW / 2;
             const dy = dr * cellH + cellH / 2;
+
+            // Outer ring
+            ctx.beginPath();
+            ctx.rect(dx - rad * 1.2, dy - rad * 1.2, rad * 2.4, rad * 2.4);
+            ctx.strokeStyle = 'rgba(244, 63, 94, 0.35)';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            // Core square
             ctx.beginPath();
             ctx.rect(dx - rad * 0.9, dy - rad * 0.9, rad * 1.8, rad * 1.8);
-            ctx.fillStyle = '#ef4444';
+            ctx.fillStyle = '#f43f5e';
             ctx.fill();
-            ctx.lineWidth = 2.5;
-            ctx.strokeStyle = '#b91c1c';
+            ctx.strokeStyle = '#be123c';
+            ctx.lineWidth = 1.5;
             ctx.stroke();
-            ctx.fillStyle = 'white';
-            ctx.font = `bold ${Math.max(9, Math.floor(minCell * 0.32))}px Inter`;
+
+            ctx.fillStyle = '#ffffff';
+            ctx.font = `700 ${Math.max(9, Math.floor(minCell * 0.3))}px var(--font-sans)`;
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
             ctx.fillText('D', dx, dy);
 
-            // Draw Taxi
+            // 6. Draw Taxi Vehicle (Sleek Vector Vehicle, NO childish emojis)
             const [tr, tc] = currentData.taxi_pos;
             const tx = tc * cellW + cellW / 2;
             const ty = tr * cellH + cellH / 2;
+            const vWidth = Math.max(14, minCell * 0.65);
+            const vHeight = Math.max(14, minCell * 0.65);
+
+            ctx.save();
+            ctx.translate(tx, ty);
+
+            // Vehicle chassis shadow
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
             ctx.beginPath();
-            ctx.arc(tx, ty, rad * 1.1, 0, Math.PI * 2);
-            ctx.fillStyle = '#f59e0b';
+            ctx.roundRect(-vWidth / 2 + 1, -vHeight / 2 + 2, vWidth, vHeight, 4);
             ctx.fill();
-            ctx.lineWidth = 3;
+
+            // Vehicle body (Yellow taxi cab)
+            ctx.fillStyle = '#f59e0b';
             ctx.strokeStyle = '#d97706';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.roundRect(-vWidth / 2, -vHeight / 2, vWidth, vHeight, 4);
+            ctx.fill();
             ctx.stroke();
-            ctx.font = `${Math.max(12, Math.floor(minCell * 0.45))}px sans-serif`;
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText(currentData.passenger_picked ? '🚕' : '🚖', tx, ty);
+
+            // Windshield / Cabin Glass
+            ctx.fillStyle = '#0f172a';
+            ctx.beginPath();
+            ctx.roundRect(-vWidth * 0.32, -vHeight * 0.32, vWidth * 0.64, vHeight * 0.64, 2);
+            ctx.fill();
+
+            // Dispatch Roof Light Indicator
+            // Green if passenger on-board, Amber if en-route
+            ctx.fillStyle = currentData.passenger_picked ? '#10b981' : '#fef08a';
+            ctx.beginPath();
+            ctx.roundRect(-vWidth * 0.15, -vHeight * 0.15, vWidth * 0.3, vHeight * 0.3, 1.5);
+            ctx.fill();
+
+            ctx.restore();
         }
 
         fetchState();
